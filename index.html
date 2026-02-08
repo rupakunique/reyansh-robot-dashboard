@@ -1,50 +1,133 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🤖 RoboReyansh – Cloud Control</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🤖 RoboReyansh – Global Control</title>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <style>
+*{margin:0;padding:0;box-sizing:border-box}
 body{
-  background:#0b1220;color:#e0e6ff;
-  font-family:Segoe UI;text-align:center;padding:20px
+  background:linear-gradient(135deg,#0a0e1a,#1a2338);
+  color:#e0e6ff;font-family:Segoe UI;text-align:center;
+  padding:15px;min-height:100vh
 }
-h1{color:#7df9ff}
-button{padding:14px 22px;margin:8px;border:none;
-  border-radius:10px;font-size:15px;font-weight:700}
-.fwd{background:#00ff88}
+h1{
+  font-size:26px;margin:20px 0;
+  background:linear-gradient(45deg,#00d4ff,#7df9ff);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent
+}
+.status{
+  padding:10px;margin:10px auto;
+  max-width:340px;border-radius:12px;
+  font-weight:700
+}
+.ok{background:#00ff88;color:#000}
+.bad{background:#ff4444;color:#fff}
+.panel{
+  background:#0b1220;border-radius:14px;
+  padding:14px;margin:14px auto;
+  max-width:360px
+}
+.bar{height:14px;background:#1b2338;border-radius:10px;margin:8px 0}
+.bar span{display:block;height:100%;width:0%;border-radius:10px}
+#L{background:#00c6ff}#F{background:#00ff88}#R{background:#ff9f00}
+#mL{background:#b388ff}#mR{background:#ff80ab}
+
+#joyWrap{
+  width:200px;height:200px;margin:20px auto;
+  border-radius:50%;
+  background:#0f1628;position:relative
+}
+#joy{
+  width:80px;height:80px;border-radius:50%;
+  background:#7df9ff;position:absolute;
+  left:60px;top:60px
+}
+button{
+  padding:12px 24px;margin:8px;border:none;
+  border-radius:10px;font-weight:700
+}
 .stop{background:#ff4444;color:#fff}
-.turn{background:#ffaa00}
-.status{margin:15px;font-weight:600}
 </style>
 </head>
 
 <body>
-<h1>🤖 RoboReyansh – Cloud Control</h1>
-<div class="status" id="st">🔌 Connecting MQTT...</div>
+<h1>🤖 RoboReyansh – Global Control</h1>
+<div id="status" class="status bad">🔌 Connecting MQTT…</div>
 
-<button class="fwd" onclick="send(180,180)">⬆ Forward</button><br>
-<button class="turn" onclick="send(180,-180)">↺ Left</button>
-<button class="stop" onclick="send(0,0)">⏹ Stop</button>
-<button class="turn" onclick="send(-180,180)">↻ Right</button><br>
-<button class="fwd" onclick="send(-180,-180)">⬇ Back</button>
+<div class="panel">
+  <b>📡 Radar (cm)</b>
+  <div class="bar"><span id="L"></span></div>
+  <div class="bar"><span id="F"></span></div>
+  <div class="bar"><span id="R"></span></div>
+</div>
+
+<div class="panel">
+  <b>⚙ Motors</b>
+  <div class="bar"><span id="mL"></span></div>
+  <div class="bar"><span id="mR"></span></div>
+</div>
+
+<div id="joyWrap"><div id="joy"></div></div>
+<button class="stop" onclick="send(0,0)">⏹ STOP</button>
 
 <script>
-const st = document.getElementById("st");
+const statusDiv=document.getElementById("status");
+const L=document.getElementById("L");
+const F=document.getElementById("F");
+const R=document.getElementById("R");
+const mL=document.getElementById("mL");
+const mR=document.getElementById("mR");
 
+/* 🔗 MQTT WEB SOCKET */
 const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
 
-client.on("connect", ()=>{
-  st.innerHTML="🌍 Connected – Global Control Ready";
+client.on("connect",()=>{
+  statusDiv.className="status ok";
+  statusDiv.innerHTML="🌍 Connected – Global Control Active";
+  client.subscribe("reyansh/robot/state");
+});
+
+client.on("message",(t,msg)=>{
+  const d=JSON.parse(msg.toString());
+  L.style.width=d.L/250*100+"%";
+  F.style.width=d.F/250*100+"%";
+  R.style.width=d.R/250*100+"%";
+  mL.style.width=Math.abs(d.mL)/255*100+"%";
+  mR.style.width=Math.abs(d.mR)/255*100+"%";
 });
 
 function send(l,r){
   client.publish("reyansh/robot/cmd",
-    JSON.stringify({L:l,R:r})
+    JSON.stringify({L:Math.round(l),R:Math.round(r)})
   );
+}
+
+/* 🎮 Virtual Joystick */
+const joy=document.getElementById("joy");
+const wrap=document.getElementById("joyWrap");
+const C=100; let active=false;
+
+wrap.onpointerdown=e=>{active=true;move(e)};
+wrap.onpointermove=e=>active&&move(e);
+wrap.onpointerup=wrap.onpointerleave=()=>{
+  active=false;
+  joy.style.left="60px";joy.style.top="60px";
+  send(0,0);
+};
+
+function move(e){
+  const r=wrap.getBoundingClientRect();
+  let dx=e.clientX-r.left-C;
+  let dy=e.clientY-r.top-C;
+  const d=Math.hypot(dx,dy);
+  if(d>70){dx*=70/d;dy*=70/d}
+  joy.style.left=C+dx-40+"px";
+  joy.style.top=C+dy-40+"px";
+  send((-dy+dx)*1.8,(-dy-dx)*1.8);
 }
 </script>
 </body>
